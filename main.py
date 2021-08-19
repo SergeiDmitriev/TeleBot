@@ -1,5 +1,6 @@
 import telebot
 import json
+import csv
 import os
 from telebot import types
 from functools import wraps
@@ -26,7 +27,7 @@ def start(message):
         remove_initial_keyboard(user_id, "Как тебя зовут?")
         bot.register_next_step_handler(message, get_name)
     elif message.text == "TODO":
-        users_todo[user_id] = {}
+        users_todo["user_id"] = user_id
         remove_initial_keyboard(user_id, "Введите текст заметки")
         bot.register_next_step_handler(message, get_text_todo)
 
@@ -41,7 +42,7 @@ def get_text_todo(message):
     # bot.send_message(user_id, f"{text_todo}")
 
     if text_todo:
-        users_todo[user_id]["text"] = text_todo
+        users_todo["text"] = text_todo
 
         bot.send_message(user_id, "Введи дату заметки в формате dd/mm/yyyy")
         bot.register_next_step_handler(message, get_date_todo)
@@ -57,11 +58,11 @@ def get_date_todo(messege):
 
     try:
         date_todo = datetime.strptime(text_date_todo, "%d/%m/%Y")
-        users_todo[user_id]["date"] = text_date_todo
+        users_todo["date"] = text_date_todo
 
-        todo_text = users_todo[user_id]["text"]
-        todo_date = users_todo[user_id]["date"]
-        question = f"Ты создал заметку с тексттом \"{todo_text}\" на дату {todo_date}. Верно?"
+        todo_text = users_todo["text"]
+        todo_date = users_todo["date"]
+        question = f"Ты создал заметку с текстом \"{todo_text}\" на дату {todo_date}. Верно?"
         render_yes_now_keyboard(user_id, question, "to")
     except:
         bot.send_message(user_id, "Введи дату корректно!")
@@ -130,6 +131,13 @@ def get_age(message):
         bot.send_message(user_id, "Введите цифрами, пожалуйста")
         bot.register_next_step_handler(message, get_age)
 
+def write_file_json(json_dir, file_name, data_set):
+    file_path = os.path.join(json_dir, f"{file_name}.json")
+    if not os.path.exists(json_dir):
+        os.makedirs(json_dir)
+
+    with open(file_path, "w") as json_file:
+        json.dump(data_set, json_file, indent=4, sort_keys=True)
 
 @bot.callback_query_handler(func=lambda call: call.data.startswith("reg_"))
 @bot.callback_query_handler(func=lambda call: call.data.startswith("to_"))
@@ -137,31 +145,38 @@ def callback_worker(call):
     user_id = call.from_user.id
     if call.data == "reg_yes":
         bot.send_message(user_id, "Спасибо, я запомню!")
-        json_dir = "InformationAboutUsers"
-        file_path = os.path.join(json_dir, "users.json")
-        if not os.path.exists(json_dir):
-            os.makedirs(json_dir)
 
-        with open(file_path, "w") as json_file:
-            json.dump(users, json_file, indent=4, sort_keys=True)
+        json_dir = "InformationAboutUsers"
+        file_name = "users"
+        write_file_json(json_dir, file_name, users)
 
         bot.send_message(user_id, "А лучше запишу в формате .json)")
         # pretend that we save in database
     elif call.data == "to_yes":
         bot.send_message(user_id, "Отлично, сейчас сделаю заметку!")
 
-        json_dir = "TODOInformation"
-        file_path = os.path.join(json_dir, "todos.json")
+        json_dir = os.path.join("TODOInformation", "json")
+        file_name = "todos"
+        write_file_json(json_dir, file_name, users_todo)
+
+        json_dir = os.path.join("TODOInformation", "csv")
+        file_path = os.path.join(json_dir, "todos.csv")
         if not os.path.exists(json_dir):
             os.makedirs(json_dir)
 
-        with open(file_path, "w") as json_file:
-            json.dump(users_todo, json_file, indent=4, sort_keys=True)
+        with open(file_path, "w") as csv_file:
+            fieldnames = ["user_id", "text", "date"]
+            writer = csv.DictWriter(csv_file, fieldnames=fieldnames)
+
+            writer.writeheader()
+            writer.writerow(users_todo)
+
+        bot.send_message(user_id, "Готово!")
+
     elif call.data == "reg_no" or all.data == "to_no":
         # remove user
         users.pop(user_id, None)
         render_initial_keyboard(user_id)
-
 
 def render_yes_now_keyboard(user_id: int, question: str, prefix: str):
     keyboard = types.InlineKeyboardMarkup()
