@@ -1,12 +1,12 @@
-import csv
+import sqlite3
 import os
 from datetime import datetime
 
-from bl.const import users_todo, csv_dir, file_path
+from bl.const import db_file_user_todo
 from bl.remove_initial_keyboard import remove_initial_keyboard, render_yes_now_keyboard, render_initial_keyboard
 from bot import bot
 
-
+users_todo = {}
 def process_add_todo(messege):
     user_id = messege.from_user.id
     users_todo[user_id] = {"user_id": user_id}
@@ -34,11 +34,11 @@ def get_date_todo(messege):
     # bot.send_message(user_id, f"{type(text_date_todo)}")
 
     try:
-        date_todo = datetime.strptime(text_date_todo, "%d/%m/%Y")
-        users_todo[user_id]["date"] = text_date_todo
+        date_todo = datetime.strptime(text_date_todo, "%d/%m/%Y").date()
+        users_todo[user_id]["date_todo"] = date_todo
 
         todo_text = users_todo[user_id]["text"]
-        todo_date = users_todo[user_id]["date"]
+        todo_date = users_todo[user_id]["date_todo"]
         question = f"Ты создал заметку с текстом \"{todo_text}\" на дату {todo_date}. Верно?"
         render_yes_now_keyboard(user_id, question, "to")
     except ValueError:
@@ -51,21 +51,32 @@ def callback_worker(call):
     if call.data == "to_yes":
         bot.send_message(user_id, "Отлично, сейчас сделаю заметку!")
 
-        fieldnames = ["user_id", "text", "date"]
+        try:
+            sqlite_connection = sqlite3.connect(db_file_user_todo)
 
-        if not os.path.exists(csv_dir):
-            os.makedirs(csv_dir)
+        except sqlite3.Error as error:
+            print('Ошибка подключения', error)
 
-        if not os.path.isfile(file_path):
-            with open(file_path, "w") as csv_file:
-                writer = csv.DictWriter(csv_file, fieldnames)
-                writer.writeheader()
+        command = """
+            CREATE TABLE IF NOT EXISTS user_todo(
+                user_id INTEGER,
+                text VARCHAR(255) NOT NULL,
+                date_todo DATE NOT NULL
+            );
+        """
 
-        with open(file_path, "a") as csv_file:
-            writer = csv.DictWriter(csv_file, fieldnames)
+        with sqlite_connection as conn:
+            cur = conn.cursor()
+            cur.execute(command)
 
-            user_todo = users_todo[user_id]
-            writer.writerow(user_todo)
+        command = """
+            INSERT INTO user_todo(user_id, text, date_todo)
+            VALUES (:user_id, :text, :date_todo)
+        """
+
+        with sqlite_connection as conn:
+            cur = sqlite_connection.cursor()
+            cur.execute(command, users_todo[user_id])
 
         bot.send_message(user_id, "Готово!")
 
