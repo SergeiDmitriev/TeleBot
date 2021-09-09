@@ -4,8 +4,12 @@ import sqlite3
 
 from datetime import datetime
 
+from sqlalchemy import func
+from sqlalchemy.orm import sessionmaker
+
 from bl.const import DATE_FORMAT, db_file_user_todo
-from bl.remove_initial_keyboard import remove_initial_keyboard
+from bl.common import remove_initial_keyboard
+from bl.models import engine, User_todo
 from bot import bot
 
 
@@ -18,17 +22,12 @@ def process_get_todo(message):
 def get_todo_file_from_user_id(user_id, date_todo):
     text_message = ""
 
-    command = """
-        SELECT text FROM user_todo
-        WHERE user_id = :user_id
-        AND date_todo = :date_todo
-    """
+    Session = sessionmaker(engine)
+    # создаем сессию
+    with Session() as session:
+        todos = session.query(User_todo.text).filter(func.date(User_todo.date_todo) == date_todo)
 
-    with sqlite3.connect(db_file_user_todo) as conn:
-        cur = conn.cursor()
-        result = cur.execute(command, {"user_id": user_id, "date_todo": date_todo})
-
-        for num, res in enumerate(result.fetchall()):
+        for num, res in enumerate(todos.all()):
             text_message = text_message + "\n" + str((num + 1)) + ". " + res[0]
 
     return text_message
