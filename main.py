@@ -1,7 +1,8 @@
 from bl.add_todo import process_add_todo
 from bl.get_todo import process_get_todo
+from bl.models import create_bases
 from bl.registration import process_registration
-from bl.remove_initial_keyboard import render_initial_keyboard, render_yes_now_keyboard
+from bl.common import render_initial_keyboard, render_yes_now_keyboard
 from bot import bot
 
 
@@ -19,3 +20,4 @@ def start(message):
 
 if __name__ == "__main__":
     bot.polling(none_stop=True)
+    create_bases()
